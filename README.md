@@ -1,61 +1,61 @@
 # TraceLab Webhooks
 
-[![CI](https://github.com/diego/tracelab-webhooks/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+[![CI](https://github.com/vejjeto/tracelab-webhooks/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 
-**Live SSE Webhook Inspector, Stripe/GitHub HMAC-SHA256 Verifier, Side-by-Side Replay Diff & Integrated MCP Server.**  
-Inspect incoming webhooks in `<100ms` via Server-Sent Events, verify signatures in constant time, replay requests safely with DNS-resolved anti-SSRF protection, and query captured traffic directly from AI agents over JSON-RPC 2.0 MCP.
+**Inspector de Webhooks en vivo por SSE, Verificador HMAC-SHA256 (Stripe y GitHub), Replay con Diff lado a lado y Servidor MCP integrado.**  
+Captura peticiones entrantes en `<100 ms` mediante Server-Sent Events, verifica firmas en tiempo constante, reenvía webhooks de forma segura con protección anti-SSRF por DNS y consulta el tráfico capturado desde agentes de IA vía JSON-RPC 2.0 MCP.
 
-Live interactive sandbox: [`/demo`](http://localhost:3008/demo) · OpenAPI 3.1 Docs: [`/api/docs`](http://localhost:3008/api/docs)
+Sandbox interactivo: [`/demo`](http://localhost:3008/demo) · Documentación OpenAPI 3.1: [`/api/docs`](http://localhost:3008/api/docs)
 
 ---
 
-## Architecture & Request Flow
+## Arquitectura y Flujo de Peticiones
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Sender as Webhook Sender (Stripe / GitHub / Custom)
+    actor Sender as Emisor Webhook (Stripe / GitHub / Custom)
     participant Hook as POST /api/hook/[binId]
     participant DB as SQLite / Drizzle
-    participant SSE as SSE Broker (/api/bins/[binId]/stream)
-    participant UI as TraceLab UI & MCP Inspector
+    participant SSE as Broker SSE (/api/bins/[binId]/stream)
+    participant UI as TraceLab UI e Inspector MCP
 
-    Sender->>Hook: POST payload + signature header (<= 512 KB)
-    Hook->>DB: Validate bin TTL (410 Gone if expired) & persist request
-    Hook-->>SSE: Publish request:captured event
-    SSE-->>UI: Push live event (<100ms, 15s keep-alive)
-    Hook-->>Sender: Custom status + body + X-TraceLab-Request-Id
-    UI->>Hook: Replay via POST /api/requests/[id]/replay (DNS anti-SSRF guard)
-    UI->>UI: Verify HMAC-SHA256 & run MCP tools (POST /api/mcp)
+    Sender->>Hook: POST payload + header firma (<= 512 KB)
+    Hook->>DB: Valida TTL del bin (410 Gone si expiró) y persiste
+    Hook-->>SSE: Publica evento request:captured
+    SSE-->>UI: Empuja evento en vivo (<100ms, keep-alive 15s)
+    Hook-->>Sender: Status personalizado + body + x-request-id
+    UI->>Hook: Replay vía POST /api/requests/[id]/replay (guardia DNS anti-SSRF)
+    UI->>UI: Verifica HMAC-SHA256 y ejecuta tools MCP (POST /api/mcp)
 ```
 
 ---
 
-## Architecture Decision Records (ADRs)
+## Decisiones Técnicas Clave (ADRs)
 
-1. **In-Memory SSE Broker + SQLite WAL (`node:sqlite`)** — Single-process pub/sub delivers sub-100ms live updates without Redis overhead while WAL mode prevents read/write contention on local inspection workloads.
-2. **DNS-Resolved Anti-SSRF Guard on Replay (`src/lib/ssrf.ts`)** — Every replay URL is parsed, restricted to `http:`/`https:`, and resolved via `dns.lookup(..., { all: true })` to reject loopback, private CIDRs, IPv6 ULA/link-local, and cloud metadata IPs before `fetch()`.
-3. **Shared MCP Core (`src/mcp/tools.ts`) for HTTP + Stdio** — Both `POST /api/mcp` and `src/mcp/server.ts` dispatch through one JSON-RPC 2.0 handler exposing `list_recent_webhooks`, `get_webhook_detail`, `get_last_error_webhook`, and `verify_webhook_hmac`.
+1. **Broker SSE en memoria + SQLite WAL (`node:sqlite`)**: Pub/sub en un solo proceso entrega actualizaciones en `<100 ms` sin requerir Redis, mientras el modo WAL evita contención de lectura/escritura en cargas locales de inspección.
+2. **Guardia Anti-SSRF por DNS en Replay (`src/lib/ssrf.ts`)**: Toda URL de replay se restringe a `http:`/`https:` y se resuelve con `dns.lookup(..., { all: true })` para rechazar loopback, CIDRs privados, IPv6 ULA/link-local e IPs de metadatos cloud antes de ejecutar `fetch()`.
+3. **Núcleo MCP compartido (`src/mcp/tools.ts`) para HTTP + Stdio**: Tanto `POST /api/mcp` como `src/mcp/server.ts` despachan mediante un único manejador JSON-RPC 2.0 exponiendo `list_recent_webhooks`, `get_webhook_detail`, `get_last_error_webhook` y `verify_webhook_hmac`.
 
 ---
 
-## Quick Start (3 Steps)
+## Ejecución Local en 3 Pasos
 
 ```bash
-# 1. Install dependencies & initialize SQLite schema + demo-bin seed
+# 1. Instalar dependencias e inicializar esquema SQLite + seed demo-bin
 pnpm install && pnpm db:migrate && pnpm db:seed
 
-# 2. Run quality gates (lint, typecheck, unit tests)
+# 2. Correr puertas de calidad (lint, typecheck, tests unitarios)
 pnpm lint && pnpm typecheck && pnpm test
 
-# 3. Start TraceLab on http://localhost:3008
+# 3. Levantar TraceLab en http://localhost:3008
 pnpm dev
 ```
 
 ---
 
-## Honest 100 → 100k Scale Trade-Offs
+## Trade-offs Honestos (100 → 100k Peticiones)
 
-1. **SSE Fan-Out**: The in-memory `EventEmitter` broker scales cleanly for 100 concurrent bins on one instance; at 100k concurrent listeners across multiple replicas, replace `src/core/sse-broker.ts` with Redis Pub/Sub or NATS.
-2. **SQLite Storage**: `node:sqlite` + WAL handles thousands of local webhook captures with zero setup; at 100k+ requests/day or multi-writer deployments, switch Drizzle to the included PostgreSQL (`docker-compose.yml` + `src/db/schema.pg.ts`) target with TTL partitioning.
-3. **Synchronous Replay**: `POST /api/requests/[id]/replay` awaits upstream HTTP responses (8s timeout) inline; at 100k replays, offload replay execution to a background job queue with exponential backoff.
+1. **Fan-Out SSE**: El broker en memoria escala sin fricción para 100 bins concurrentes en una instancia; con 100k suscriptores simultáneos entre múltiples réplicas se debe reemplazar `src/core/sse-broker.ts` por Redis Pub/Sub o NATS.
+2. **Almacenamiento SQLite**: `node:sqlite` + WAL maneja miles de capturas locales sin configuración; por encima de 100k peticiones/día o múltiples escritores conviene usar el esquema PostgreSQL incluido (`docker-compose.yml` + `src/db/schema.pg.ts`) con particionado por TTL.
+3. **Replay sincrónico**: `POST /api/requests/[id]/replay` espera la respuesta HTTP destino (timeout 8s) en línea; a 100k replays conviene delegar el reenvío a una cola de trabajos en segundo plano con backoff exponencial.
