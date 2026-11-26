@@ -5,6 +5,10 @@
 **Inspector de Webhooks en vivo por SSE, Verificador HMAC-SHA256 (Stripe y GitHub), Replay con Diff lado a lado y Servidor MCP integrado.**  
 Captura peticiones entrantes en `<100 ms` mediante Server-Sent Events, verifica firmas en tiempo constante, reenvía webhooks de forma segura con protección anti-SSRF por DNS y consulta el tráfico capturado desde agentes de IA vía JSON-RPC 2.0 MCP.
 
+## Qué hace este proyecto
+
+**TraceLab Webhooks** crea URLs temporales (bins) para recibir, inspeccionar y depurar webhooks en tiempo real conforme llegan. Permite revisar headers y payload JSON al instante, validar firmas criptográficas HMAC de Stripe o GitHub, reenviar (*replay*) peticiones hacia tu servidor local comparando respuestas con un diff y consultar el historial desde asistentes de IA vía MCP.
+
 Sandbox interactivo: [`/demo`](http://localhost:3008/demo) · Documentación OpenAPI 3.1: [`/api/docs`](http://localhost:3008/api/docs)
 
 ---
