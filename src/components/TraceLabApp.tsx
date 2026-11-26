@@ -2,12 +2,14 @@
 
 import { UiButton } from "@/components/ui/button";
 import { HealthBadge } from "@/components/ui/health-badge";
+import { LanguageToggle } from "@/components/ui/language-toggle";
 import { useUiToast } from "@/components/ui/toast-provider";
 import type {
   BinDTO,
   CapturedRequestDTO,
   ReplayLogDTO,
 } from "@/contracts/schemas";
+import { useLocale } from "@/lib/i18n";
 import { type InspectorTab, useTraceLabStore } from "@/store/tracelab-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -72,8 +74,12 @@ function safeJsonRecord(jsonStr: string): Record<string, string> {
   }
 }
 
-function formatBodyPreview(rawBody: string, pretty: boolean): string {
-  if (!rawBody) return "(cuerpo vacío)";
+function formatBodyPreview(
+  rawBody: string,
+  pretty: boolean,
+  emptyLabel: string,
+): string {
+  if (!rawBody) return emptyLabel;
   if (!pretty) return rawBody;
   try {
     return JSON.stringify(JSON.parse(rawBody), null, 2);
@@ -83,6 +89,7 @@ function formatBodyPreview(rawBody: string, pretty: boolean): string {
 }
 
 export function TraceLabApp() {
+  const { locale, t } = useLocale();
   const queryClient = useQueryClient();
   const { pushToast } = useUiToast();
   const {
@@ -302,27 +309,27 @@ export function TraceLabApp() {
   const tabs: { id: InspectorTab; label: string; icon: React.ReactNode }[] = [
     {
       id: "body",
-      label: "Body & Headers",
+      label: t.tabHeadersQuery,
       icon: <Code2 className="h-3.5 w-3.5" />,
     },
     {
       id: "hmac",
-      label: "HMAC Verifier",
+      label: t.tabHmac,
       icon: <ShieldCheck className="h-3.5 w-3.5" />,
     },
     {
       id: "snippets",
-      label: "Snippets",
+      label: t.tabSnippets,
       icon: <Send className="h-3.5 w-3.5" />,
     },
     {
       id: "replay",
-      label: `Replay & Diff (${selectedRequest ? replayLogs.filter((l) => l.requestId === selectedRequest.id).length : 0})`,
+      label: `${t.tabReplay} (${selectedRequest ? replayLogs.filter((l) => l.requestId === selectedRequest.id).length : 0})`,
       icon: <GitCompareArrows className="h-3.5 w-3.5" />,
     },
     {
       id: "mcp",
-      label: "MCP Inspector",
+      label: t.tabMcp,
       icon: <Bot className="h-3.5 w-3.5" />,
     },
   ];
@@ -343,7 +350,7 @@ export function TraceLabApp() {
               </span>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Live Webhook Inspector, HMAC Verifier & API Replay
+              {t.headerSubtitle}
             </p>
           </div>
         </div>
@@ -352,7 +359,7 @@ export function TraceLabApp() {
           <select
             value={activeBinId}
             onChange={(e) => setActiveBinId(e.target.value)}
-            aria-label="Seleccionar Bin"
+            aria-label={t.selectBinAria}
             className="h-8 rounded-lg border border-zinc-300 bg-white px-2.5 font-mono text-xs outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-950"
           >
             {(binsQuery.data?.bins ?? []).map((b) => (
@@ -369,7 +376,7 @@ export function TraceLabApp() {
             onClick={createNewBin}
           >
             <Plus className="h-3.5 w-3.5" />
-            Nuevo Bin
+            {t.newBin}
           </UiButton>
 
           <HealthBadge endpoint="/api/health" />
@@ -381,9 +388,10 @@ export function TraceLabApp() {
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 transition hover:border-indigo-500/60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
           >
             <FileCode2 className="h-3.5 w-3.5 text-indigo-400" />
-            API Docs
+            {t.apiDocs}
           </a>
 
+          <LanguageToggle />
           <ThemeToggle />
         </div>
       </header>
@@ -408,7 +416,7 @@ export function TraceLabApp() {
               ) : (
                 <Copy className="h-3.5 w-3.5" />
               )}
-              Copiar URL
+              {copiedUrl ? t.copiedUrl : t.copyUrl}
             </button>
 
             <span
@@ -423,10 +431,10 @@ export function TraceLabApp() {
             >
               <Radio className="h-3 w-3" />
               {sseState === "connected"
-                ? "SSE Conectado"
+                ? t.sseConnected
                 : sseState === "connecting"
-                  ? "Conectando SSE..."
-                  : "SSE Reconectando"}
+                  ? t.sseConnecting
+                  : t.sseReconnecting}
             </span>
           </div>
 
@@ -438,7 +446,7 @@ export function TraceLabApp() {
               loading={simulating === "stripe"}
               onClick={() => simulateWebhook("stripe")}
             >
-              Disparar Webhook Stripe
+              {t.simulateStripe}
             </UiButton>
             <UiButton
               type="button"
@@ -447,7 +455,7 @@ export function TraceLabApp() {
               loading={simulating === "github"}
               onClick={() => simulateWebhook("github")}
             >
-              Disparar Webhook GitHub
+              {t.simulateGithub}
             </UiButton>
             <UiButton
               type="button"
@@ -456,7 +464,7 @@ export function TraceLabApp() {
               loading={simulating === "custom"}
               onClick={() => simulateWebhook("custom")}
             >
-              Disparar JSON Custom
+              {t.simulateCustom}
             </UiButton>
           </div>
         </div>
@@ -469,14 +477,14 @@ export function TraceLabApp() {
           <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
             <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
               <Activity className="h-3.5 w-3.5 text-indigo-400" />
-              Requests ({requests.length})
+              {t.requestsTitle} ({requests.length})
             </span>
           </div>
 
           <div className="max-h-[680px] flex-1 divide-y divide-zinc-200 overflow-y-auto dark:divide-zinc-800">
             {requests.length === 0 ? (
               <div className="p-6 text-center text-xs text-zinc-500">
-                Esperando webhooks entrantes en{" "}
+                {t.waitingWebhooks}{" "}
                 <code className="font-mono">/api/hook/{activeBinId}</code>...
               </div>
             ) : (
@@ -504,14 +512,16 @@ export function TraceLabApp() {
                       </span>
                       <span className="font-mono text-[11px] text-zinc-500">
                         {req.sizeBytes} B ·{" "}
-                        {new Date(req.receivedAt).toLocaleTimeString("es-ES")}
+                        {new Date(req.receivedAt).toLocaleTimeString(
+                          locale === "es" ? "es-ES" : "en-US",
+                        )}
                       </span>
                     </div>
                     <p className="truncate font-mono text-xs font-medium text-zinc-800 dark:text-zinc-200">
                       {req.path}
                     </p>
                     <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
-                      {req.rawBody.slice(0, 72) || "(sin cuerpo)"}
+                      {req.rawBody.slice(0, 72) || t.emptyBodyShort}
                     </p>
                   </button>
                 );
@@ -524,7 +534,7 @@ export function TraceLabApp() {
         <section className="flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/60">
           {!selectedRequest ? (
             <div className="flex flex-1 items-center justify-center p-10 text-sm text-zinc-500">
-              Selecciona o simula un webhook para inspeccionarlo.
+              {t.selectOrSimulate}
             </div>
           ) : (
             <>
@@ -571,25 +581,29 @@ export function TraceLabApp() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Payload Body ({selectedRequest.contentType})
+                          {t.payloadBody} ({selectedRequest.contentType})
                         </h3>
                         <button
                           type="button"
                           onClick={togglePrettyBody}
                           className="rounded border border-zinc-300 px-2 py-0.5 text-[11px] font-medium text-zinc-600 hover:border-indigo-500 dark:border-zinc-700 dark:text-zinc-300"
                         >
-                          {prettyBody ? "Ver Raw" : "Pretty JSON"}
+                          {prettyBody ? t.viewRaw : t.prettyJson}
                         </button>
                       </div>
                       <pre className="max-h-72 overflow-auto rounded-xl border border-zinc-200 bg-zinc-100 p-4 font-mono text-xs text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
-                        {formatBodyPreview(selectedRequest.rawBody, prettyBody)}
+                        {formatBodyPreview(
+                          selectedRequest.rawBody,
+                          prettyBody,
+                          t.emptyBody,
+                        )}
                       </pre>
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Headers Sanitizados
+                          {t.sanitizedHeaders}
                         </h3>
                         <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
                           <table className="w-full text-left font-mono text-[11px]">
@@ -613,10 +627,14 @@ export function TraceLabApp() {
 
                       <div className="space-y-2">
                         <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Query Params JSON
+                          {t.queryParamsJson}
                         </h3>
                         <pre className="rounded-xl border border-zinc-200 bg-zinc-100 p-3 font-mono text-[11px] text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
-                          {formatBodyPreview(selectedRequest.queryJson, true)}
+                          {formatBodyPreview(
+                            selectedRequest.queryJson,
+                            true,
+                            t.emptyBody,
+                          )}
                         </pre>
                       </div>
                     </div>

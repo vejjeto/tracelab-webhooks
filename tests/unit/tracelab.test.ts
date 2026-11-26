@@ -19,6 +19,7 @@ import { subscribeToBin } from "@/core/sse-broker";
 import { closeDb, ensureSchema, getDb } from "@/db";
 import { bins } from "@/db/schema";
 import { validateEnv } from "@/lib/env";
+import { messages } from "@/lib/i18n";
 import { isBlockedIpAddress, validateSafeExternalUrl } from "@/lib/ssrf";
 import { executeMcpTool } from "@/mcp/tools";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -353,5 +354,16 @@ describe("TraceLab Core, Security, MCP & API", () => {
     expect(spec.paths["/api/hook/{binId}"]).toBeDefined();
     expect(spec.paths["/api/requests/{id}/replay"]).toBeDefined();
     expect(spec.paths["/api/mcp"]).toBeDefined();
+  });
+
+  it("maintains full es/en dictionary parity in i18n messages", () => {
+    const esKeys = Object.keys(messages.es).sort();
+    const enKeys = Object.keys(messages.en).sort();
+    expect(esKeys).toEqual(enKeys);
+    for (const key of esKeys) {
+      const k = key as keyof typeof messages.es;
+      expect(messages.es[k].trim().length).toBeGreaterThan(0);
+      expect(messages.en[k].trim().length).toBeGreaterThan(0);
+    }
   });
 });
